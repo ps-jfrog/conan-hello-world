@@ -27,8 +27,8 @@ jobs:
       JAVA_PROVIDER: 'corretto'
       JAVA_VERSION: '17'
       JF_RT_URL: "https://psazuse.jfrog.io"
-      RT_REPO_VIRTUAL: "cg-lab-conan" # "helloworld-conan-virtual"
-      RT_REPO_DEV_LOCAL: "cg-lab-conan-local" # "helloworld-conan-dev-local"
+      RT_REPO_VIRTUAL: "cg-lab-conan-virtual" # "helloworld-conan-virtual"
+      RT_REPO_DEV_LOCAL: "cg-lab-conan-default-local" # "helloworld-conan-dev-local"
       CLI_SERVER_ID: "setup-jfrog-cli-server"
       JSON_PKG_INFO: "package_info.json"
       JSON_BUILD_INFO: "build_info.json"
@@ -76,7 +76,6 @@ jobs:
           JF_GIT_TOKEN: ${{secrets.GITHUB_TOKEN}}
         with:
           version: latest
-          #oidc-provider-name: "chaitanyag-gh-actions-jfcli"
           oidc-provider-name: "krishnam-github-actions-jfcli"
 
       - name: Clone VCS
