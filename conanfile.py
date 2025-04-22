@@ -3,7 +3,7 @@ from conan.tools.cmake import CMakeToolchain, CMake, cmake_layout, CMakeDeps
 
 
 class helloRecipe(ConanFile):
-    name = "hello"
+    name = "conan_hello_build"
     version = "1.0"
     package_type = "library"
 
@@ -49,7 +49,7 @@ class helloRecipe(ConanFile):
         cmake.install()
 
     def package_info(self):
-        self.cpp_info.libs = ["hello"]
+        self.cpp_info.libs = ["conan_hello_build"]
     
     def requirements(self):
         self.requires("openssl/1.1.1c")
