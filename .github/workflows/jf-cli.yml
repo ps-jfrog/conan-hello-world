@@ -163,8 +163,6 @@ jobs:
 
       - name: "Build Info"
         run: |
-            TIMESTAMP=$(date +%F_%T | tr ':' '-') 
-            # conan art:build-info create ${{env.JSON_PKG_INFO}} ${{env.BUILD_NAME}} $TIMESTAMP ${{env.RT_REPO_DEV_LOCAL}} --server ${{env.CLI_SERVER_ID}} --with-dependencies > ${{env.JSON_BUILD_INFO}} 
             conan art:build-info create ${{env.JSON_PKG_INFO}} ${{env.BUILD_NAME}} ${{env.BUILD_ID}} ${{env.RT_REPO_DEV_LOCAL}} --server ${{env.CLI_SERVER_ID}} --with-dependencies > ${{env.JSON_BUILD_INFO}} 
 
             conan art:build-info upload ${{env.JSON_BUILD_INFO}} --server ${{env.CLI_SERVER_ID}}
@@ -187,7 +185,7 @@ jobs:
 
       - name: "RLM: RBv2 promote DEV"
         run: |
-          jf rbp ${{env.BUILD_NAME}} ${{env.BUILD_ID}} DEV --sync=true --signing-key=${{env.RBV2_SIGNING_KEY}} 
+          jf rbp ${{env.BUILD_NAME}} ${{env.BUILD_ID}} DEV --sync=true --signing-key=${{env.RBV2_SIGNING_KEY}} --promotion-type=move
 
       - name: "Evidence: RBv2 state DEV"
         continue-on-error: true 
@@ -198,7 +196,7 @@ jobs:
          
       - name: "RLM: RBv2 promote QA"
         run: |
-          jf rbp ${{env.BUILD_NAME}} ${{env.BUILD_ID}} QA --sync=true --signing-key=${{env.RBV2_SIGNING_KEY}}  
+          jf rbp ${{env.BUILD_NAME}} ${{env.BUILD_ID}} QA --sync=true --signing-key=${{env.RBV2_SIGNING_KEY}} --promotion-type=move
 
       - name: "Evidence: RBv2 state QA"
         continue-on-error: true 
