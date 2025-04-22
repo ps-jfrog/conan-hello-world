@@ -32,12 +32,13 @@ jobs:
       CLI_SERVER_ID: "setup-jfrog-cli-server"
       JSON_PKG_INFO: "package_info.json"
       JSON_BUILD_INFO: "build_info.json"
+      EVIDENCE_JSON: "evd-artifact.json"  # ref https://jfrog.com/help/r/jfrog-artifactory-documentation/evidence-setup
       RBV2_SIGNING_KEY: "${{secrets.RBV2_SIGNING_KEY}}" # ref https://jfrog.com/help/r/jfrog-artifactory-documentation/create-signing-keys-for-release-bundles-v2
       JOB_SUMMARY: false
       JFROG_CLI_LOG_LEVEL: DEBUG # DEBUG, INFO, WARN, ERROR
       BUILD_NAME: "cg_conan_hello_build"
       PACKAGE_NAME: "conan_hello_build/1.0"
-      BUILD_ID: "ga-${{github.run_number}}" # ref: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/accessing-contextual-information-about-workflow-runs#github-context
+      BUILD_ID: "ga-cg-${{github.run_number}}" # ref: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/accessing-contextual-information-about-workflow-runs#github-context
     runs-on: ${{matrix.os}}
     timeout-minutes: 30   # ref  https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#jobsjob_idtimeout-minutes
     steps:
@@ -168,6 +169,13 @@ jobs:
 
             conan art:build-info upload ${{env.JSON_BUILD_INFO}} --server ${{env.CLI_SERVER_ID}}
 
+      - name: "Evidence: Build Publish"
+        continue-on-error: true 
+        run: |
+          echo '{ "actor": "${{github.actor}}", "pipeline": "github actions","build_name": "${{env.BUILD_NAME}}", "build_id": "${{env.BUILD_ID}}", "evd": "Evidence-Buildinfo"}' > ./${{env.EVIDENCE_JSON}}
+          cat ./${{env.EVIDENCE_JSON}}
+          jf evd create --build-name ${{env.BUILD_NAME}} --build-number ${{env.BUILD_ID}} --predicate ./${{env.EVIDENCE_JSON}} --predicate-type https://jfrog.com/evidence/build-signature/v1 --key "${{secrets.KRISHNAM_JFROG_EVD_PRIVATEKEY}}" --key-alias ${{secrets.EVIDENCE_KEY_ALIAS}}
+
       - name: "RLM: RBv2 spec - create" 
         run: |
           echo "{ \"files\": [ {\"build\": \"${{env.BUILD_NAME}}/${{env.BUILD_ID}}\" } ] }"  > ${{env.RBv2_SPEC_JSON}}
@@ -181,6 +189,25 @@ jobs:
         run: |
           jf rbp ${{env.BUILD_NAME}} ${{env.BUILD_ID}} DEV --sync=true --signing-key=${{env.RBV2_SIGNING_KEY}} 
 
+      - name: "Evidence: RBv2 state DEV"
+        continue-on-error: true 
+        run: |
+          echo '{ "actor": "${{github.actor}}", "pipeline": "github actions", "build_name": "${{env.BUILD_NAME}}", "build_id": "${{env.BUILD_ID}}", "evd": "Evidence-RBv2", "rbv2_stage": "DEV" }' > ./${{env.EVIDENCE_JSON}}
+          cat ./${{env.EVIDENCE_JSON}}
+          jf evd create --release-bundle ${{env.BUILD_NAME}} --release-bundle-version ${{env.BUILD_ID}} --predicate ./${{env.EVIDENCE_JSON}} --predicate-type https://jfrog.com/evidence/rbv2-new/v1 --key "${{secrets.KRISHNAM_JFROG_EVD_PRIVATEKEY}}" --key-alias ${{secrets.EVIDENCE_KEY_ALIAS}}
+         
+      - name: "RLM: RBv2 promote QA"
+        run: |
+          jf rbp ${{env.BUILD_NAME}} ${{env.BUILD_ID}} QA --sync=true --signing-key=${{env.RBV2_SIGNING_KEY}}  
+
+      - name: "Evidence: RBv2 state QA"
+        continue-on-error: true 
+        run: |
+          echo '{ "actor": "${{github.actor}}", "pipeline": "github actions", "build_name": "${{env.BUILD_NAME}}", "build_id": "${{env.BUILD_ID}}", "evd": "Evidence-RBv2", "rbv2_stage": "QA" }' > ./${{env.EVIDENCE_JSON}}
+          cat ./${{env.EVIDENCE_JSON}}
+          jf evd create --release-bundle ${{env.BUILD_NAME}} --release-bundle-version ${{env.BUILD_ID}} --predicate ./${{env.EVIDENCE_JSON}} --predicate-type https://jfrog.com/evidence/rbv2-new/v1 --key "${{secrets.KRISHNAM_JFROG_EVD_PRIVATEKEY}}" --key-alias ${{secrets.EVIDENCE_KEY_ALIAS}}
+
+
       - name: "Package Summary"
         env:
           NAME_LINK: "${{env.JF_RT_URL}}/ui/artifactory/lifecycle/?bundleName=${{env.BUILD_NAME}}&bundleToFlash=${{env.BUILD_NAME}}&repositoryKey=release-bundles-v2&activeKanbanTab=promotion"
@@ -189,11 +216,11 @@ jobs:
           echo "# :frog:📦 Package Summary :rocket:" >> $GITHUB_STEP_SUMMARY
           echo " " >> $GITHUB_STEP_SUMMARY
           echo " " >> $GITHUB_STEP_SUMMARY
-          echo " - Package info" >> $GITHUB_STEP_SUMMARY
-          echo "    - Package Name: ${{env.BUILD_NAME}}" >> $GITHUB_STEP_SUMMARY
-          echo "    - Build Id: ${{env.BUILD_ID}}" >> $GITHUB_STEP_SUMMARY
+          echo " - RLM info" >> $GITHUB_STEP_SUMMARY
+          echo "    - RBv2 Name: ${{env.BUILD_NAME}}" >> $GITHUB_STEP_SUMMARY
+          echo "    - RBv2 Id: ${{env.BUILD_ID}}" >> $GITHUB_STEP_SUMMARY
           echo " " >> $GITHUB_STEP_SUMMARY
-          echo "RBv2: The Build Artifacts has elevated to the subsequent stages" >> $GITHUB_STEP_SUMMARY
+          echo " - RBv2: The Build Artifacts has elevated to the subsequent stages" >> $GITHUB_STEP_SUMMARY
 
           RB2_STATUS_RESP=$(curl -v -G ${JF_RT_URL}/lifecycle/api/v2/promotion/records/${BUILD_NAME}/${BUILD_ID}?async=false -H 'Content-Type: application/json' -H "Authorization: Bearer ${{steps.setup-cli.outputs.oidc-token}}")
           echo $RB2_STATUS_RESP
@@ -202,9 +229,8 @@ jobs:
           for item in ${items[@]}; do
             envVal=$(echo $item | jq -r '.environment')
             crtVal=$(echo $item | jq -r '.created')
-            echo " - ${envVal} on ${crtVal} " >> $GITHUB_STEP_SUMMARY
+            echo "    - Promoted to ${envVal} on ${crtVal} " >> $GITHUB_STEP_SUMMARY
           done
-          echo "  - Release bundle [${{env.BUILD_NAME}}](${{env.NAME_LINK}}):[${{env.BUILD_NAME}}](${{env.VER_LINK}}) " >> $GITHUB_STEP_SUMMARY
           echo " " >> $GITHUB_STEP_SUMMARY
 
  
